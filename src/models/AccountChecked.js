@@ -7,6 +7,7 @@ const schema = new mongoose.Schema({
   displayName: String,
   phone: String,
   balance: Number,
+  safe: Number,
   status: String,
   message: String
 }, { timestamps: true });
