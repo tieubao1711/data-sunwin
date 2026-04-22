@@ -49,9 +49,14 @@ exports.create = async (req, res) => {
 // ==============================
 exports.getAll = async (req, res) => {
   try {
+    const isAll = req.query.all === 'true';
+
     const page = toPositiveInt(req.query.page, 1);
-    const limit = Math.min(toPositiveInt(req.query.limit, 20), 200);
-    const skip = (page - 1) * limit;
+    const limit = isAll
+      ? 1000000 // hoặc Infinity
+      : Math.min(toPositiveInt(req.query.limit, 20), 200);
+
+    const skip = isAll ? 0 : (page - 1) * limit;
 
     const {
       search = '',
