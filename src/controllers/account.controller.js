@@ -49,18 +49,12 @@ exports.create = async (req, res) => {
 // ==============================
 exports.getAll = async (req, res) => {
   try {
-    const isAll = req.query.all === 'true';
-
     const page = toPositiveInt(req.query.page, 1);
-    const limit = isAll
-      ? 1000000 // hoặc Infinity
-      : Math.min(toPositiveInt(req.query.limit, 20), 200);
-
-    const skip = isAll ? 0 : (page - 1) * limit;
+    const limit = Math.min(toPositiveInt(req.query.limit, 20), 200);
+    const skip = (page - 1) * limit;
 
     const {
       search = '',
-      fileName = '',
       checked = '',
       sortBy = 'createdAt',
       sortOrder = 'desc'
@@ -68,12 +62,30 @@ exports.getAll = async (req, res) => {
 
     const filter = {};
 
-    // filter theo fileName
-    if (fileName) {
-      filter.fileName = {
-        $regex: escapeRegex(fileName),
-        $options: 'i'
-      };
+    // fileName có thể là:
+    // 1) ?fileName=a.txt
+    // 2) ?fileName=a.txt,b.txt
+    // 3) ?fileName=a.txt&fileName=b.txt
+    const rawFileName = req.query.fileName;
+
+    if (rawFileName) {
+      let fileNames = [];
+
+      if (Array.isArray(rawFileName)) {
+        fileNames = rawFileName;
+      } else if (typeof rawFileName === 'string') {
+        fileNames = rawFileName.split(',');
+      }
+
+      fileNames = fileNames
+        .map(x => String(x).trim())
+        .filter(Boolean);
+
+      if (fileNames.length === 1) {
+        filter.fileName = fileNames[0];
+      } else if (fileNames.length > 1) {
+        filter.fileName = { $in: fileNames };
+      }
     }
 
     // search username / password
@@ -121,7 +133,6 @@ exports.getAll = async (req, res) => {
       AccountChecked.find({}, { accountId: 1, status: 1, balance: 1 }).lean()
     ]);
 
-    // map checked info
     const checkedMap = new Map(
       checkedRows.map(row => [String(row.accountId), row])
     );
@@ -146,13 +157,10 @@ exports.getAll = async (req, res) => {
         totalPages: Math.ceil(total / limit)
       }
     });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
-
 
 // ==============================
 // GET BY ID
