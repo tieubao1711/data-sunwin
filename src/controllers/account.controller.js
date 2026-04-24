@@ -49,9 +49,14 @@ exports.create = async (req, res) => {
 // ==============================
 exports.getAll = async (req, res) => {
   try {
+    const isAll = req.query.all === 'true';
+
     const page = toPositiveInt(req.query.page, 1);
-    const limit = Math.min(toPositiveInt(req.query.limit, 20), 200);
-    const skip = (page - 1) * limit;
+    const limit = isAll
+      ? 1000000
+      : Math.min(toPositiveInt(req.query.limit, 20), 200);
+
+    const skip = isAll ? 0 : (page - 1) * limit;
 
     const {
       search = '',
@@ -62,10 +67,6 @@ exports.getAll = async (req, res) => {
 
     const filter = {};
 
-    // fileName có thể là:
-    // 1) ?fileName=a.txt
-    // 2) ?fileName=a.txt,b.txt
-    // 3) ?fileName=a.txt&fileName=b.txt
     const rawFileName = req.query.fileName;
 
     if (rawFileName) {
@@ -88,7 +89,6 @@ exports.getAll = async (req, res) => {
       }
     }
 
-    // search username / password
     if (search) {
       const keyword = {
         $regex: escapeRegex(search),
@@ -101,7 +101,6 @@ exports.getAll = async (req, res) => {
       ];
     }
 
-    // filter checked / unchecked
     if (checked === 'true' || checked === 'false') {
       const checkedRows = await AccountChecked.find({}, { accountId: 1 }).lean();
       const checkedIds = checkedRows.map(x => x.accountId);
@@ -113,7 +112,6 @@ exports.getAll = async (req, res) => {
       }
     }
 
-    // sort
     const allowedSortFields = ['createdAt', 'updatedAt', 'fileName', 'username'];
     const finalSortBy = allowedSortFields.includes(sortBy)
       ? sortBy
@@ -121,12 +119,15 @@ exports.getAll = async (req, res) => {
 
     const finalSortOrder = sortOrder === 'asc' ? 1 : -1;
 
+    const query = Account.find(filter)
+      .sort({ [finalSortBy]: finalSortOrder });
+
+    if (!isAll) {
+      query.skip(skip).limit(limit);
+    }
+
     const [items, total, checkedRows] = await Promise.all([
-      Account.find(filter)
-        .sort({ [finalSortBy]: finalSortOrder })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      query.lean(),
 
       Account.countDocuments(filter),
 
@@ -152,10 +153,11 @@ exports.getAll = async (req, res) => {
       items: data,
       pagination: {
         page,
-        limit,
+        limit: isAll ? total : limit,
         total,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: isAll ? 1 : Math.ceil(total / limit)
+      },
+      total
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
