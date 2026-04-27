@@ -22,6 +22,7 @@ const schema = new mongoose.Schema({
 
   deposits: { type: Array, default: [] },
   withdraws: { type: Array, default: [] },
+  rawResponse: { type: Object, default: null },
 
   reason: { type: String, default: '' },
   source: { type: String, default: 'local-tool' }
