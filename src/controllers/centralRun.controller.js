@@ -1,4 +1,5 @@
 const CentralRun = require('../models/CentralRun');
+const CentralLoginResult = require('../models/CentralLoginResult');
 
 exports.upsert = async (req, res) => {
   try {
@@ -50,6 +51,29 @@ exports.getAll = async (req, res) => {
       .lean();
 
     res.json({ items });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.remove = async (req, res) => {
+  try {
+    const { runKey } = req.params;
+
+    if (!runKey) {
+      return res.status(400).json({ message: 'runKey is required' });
+    }
+
+    const [runDeleted, resultsDeleted] = await Promise.all([
+      CentralRun.deleteOne({ runKey: String(runKey) }),
+      CentralLoginResult.deleteMany({ runKey: String(runKey) })
+    ]);
+
+    res.json({
+      message: 'Deleted central run',
+      runDeleted: runDeleted.deletedCount,
+      resultsDeleted: resultsDeleted.deletedCount
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
