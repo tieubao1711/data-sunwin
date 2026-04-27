@@ -28,7 +28,7 @@ exports.upsert = async (req, res) => {
       safe = 0,
       deposits = [],
       withdraws = [],
-      rawResponse = null,
+      rawResponse,
       source = 'local-tool'
     } = req.body;
 
@@ -66,7 +66,7 @@ exports.upsert = async (req, res) => {
 
       deposits,
       withdraws,
-      rawResponse,
+      rawResponse: rawResponse || null,
 
       reason: [
         depositCount > 0 ? `Có ${depositCount} lịch sử nạp` : '',
