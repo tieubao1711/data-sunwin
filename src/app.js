@@ -18,5 +18,7 @@ app.use('/accounts', require('./routes/account.routes'));
 app.use('/account-checked', require('./routes/accountChecked.routes'));
 app.use('/dashboard', require('./routes/dashboard.routes'));
 app.use('/account-flagged', require('./routes/accountFlagged.routes'));
+app.use('/central-runs', require('./routes/centralRun.routes'));
+app.use('/central-login-results', require('./routes/centralLoginResult.routes'));
 
 module.exports = app;
