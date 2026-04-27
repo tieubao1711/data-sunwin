@@ -138,7 +138,7 @@ exports.getAll = async (req, res) => {
     }
 
     const items = await CentralLoginResult.find(filter)
-      .sort({ checkedAt: -1 })
+      .sort({ balance: -1, checkedAt: -1 })
       .limit(Math.min(Number(limit || 100), 1000))
       .lean();
 
