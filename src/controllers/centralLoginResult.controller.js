@@ -147,3 +147,34 @@ exports.getAll = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.getLatestByAccount = async (req, res) => {
+  try {
+    const { username = '', password = '' } = req.query;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        message: 'username and password are required'
+      });
+    }
+
+    const item = await CentralLoginResult.findOne({
+      username: String(username).trim(),
+      password: String(password).trim()
+    })
+      .sort({
+        checkedAt: -1,
+        createdAt: -1
+      })
+      .lean();
+
+    res.json({
+      found: !!item,
+      item: item || null
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message
+    });
+  }
+};
