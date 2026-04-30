@@ -1,5 +1,6 @@
 const Account = require('../models/Account');
 const AccountChecked = require('../models/AccountChecked');
+const AccountFlagged = require('../models/AccountFlagged');
 
 function toPositiveInt(value, fallback) {
   const n = Number(value);
@@ -65,9 +66,80 @@ exports.getAll = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    const filter = {};
-
     const rawFileName = req.query.fileName;
+
+    // ==============================
+    // SPECIAL CASE: fileName=flagged
+    // Lấy data từ AccountFlagged
+    // ==============================
+    if (rawFileName === 'flagged') {
+      const flaggedFilter = {};
+
+      if (search) {
+        const keyword = {
+          $regex: escapeRegex(search),
+          $options: 'i'
+        };
+
+        flaggedFilter.$or = [
+          { username: keyword },
+          { displayName: keyword },
+          { phone: keyword }
+        ];
+      }
+
+      const allowedFlaggedSortFields = [
+        'createdAt',
+        'updatedAt',
+        'username',
+        'balance',
+        'safe',
+        'depositCount',
+        'withdrawCount',
+        'totalDeposit',
+        'totalWithdraw'
+      ];
+
+      const finalSortBy = allowedFlaggedSortFields.includes(sortBy)
+        ? sortBy
+        : 'updatedAt';
+
+      const finalSortOrder = sortOrder === 'asc' ? 1 : -1;
+
+      const query = AccountFlagged.find(flaggedFilter)
+        .sort({ [finalSortBy]: finalSortOrder });
+
+      if (!isAll) {
+        query.skip(skip).limit(limit);
+      }
+
+      const [items, total] = await Promise.all([
+        query.lean(),
+        AccountFlagged.countDocuments(flaggedFilter)
+      ]);
+
+      return res.json({
+        items: items.map(item => ({
+          ...item,
+          fileName: 'flagged',
+          isChecked: true,
+          checkedStatus: 'FLAGGED',
+          checkedBalance: item.balance || 0
+        })),
+        pagination: {
+          page,
+          limit: isAll ? total : limit,
+          total,
+          totalPages: isAll ? 1 : Math.ceil(total / limit)
+        },
+        total
+      });
+    }
+
+    // ==============================
+    // NORMAL CASE: lấy từ Account
+    // ==============================
+    const filter = {};
 
     if (rawFileName) {
       let fileNames = [];
@@ -128,9 +200,7 @@ exports.getAll = async (req, res) => {
 
     const [items, total, checkedRows] = await Promise.all([
       query.lean(),
-
       Account.countDocuments(filter),
-
       AccountChecked.find({}, { accountId: 1, status: 1, balance: 1 }).lean()
     ]);
 
@@ -159,6 +229,7 @@ exports.getAll = async (req, res) => {
       },
       total
     });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
