@@ -1,5 +1,6 @@
 const CentralRun = require('../models/CentralRun');
 const CentralLoginResult = require('../models/CentralLoginResult');
+const { getCentralToolFilter } = require('../config/centralTools');
 
 exports.upsert = async (req, res) => {
   try {
@@ -45,7 +46,9 @@ exports.upsert = async (req, res) => {
 
 exports.getAll = async (req, res) => {
   try {
-    const items = await CentralRun.find()
+    const items = await CentralRun.find({
+      toolName: getCentralToolFilter()
+    })
       .sort({ updatedAt: -1 })
       .limit(Math.min(Number(req.query.limit || 50), 200))
       .lean();
@@ -64,10 +67,15 @@ exports.remove = async (req, res) => {
       return res.status(400).json({ message: 'runKey is required' });
     }
 
-    const [runDeleted, resultsDeleted] = await Promise.all([
-      CentralRun.deleteOne({ runKey: String(runKey) }),
-      CentralLoginResult.deleteMany({ runKey: String(runKey) })
-    ]);
+    const runFilter = {
+      runKey: String(runKey),
+      toolName: getCentralToolFilter()
+    };
+
+    const runDeleted = await CentralRun.deleteOne(runFilter);
+    const resultsDeleted = runDeleted.deletedCount
+      ? await CentralLoginResult.deleteMany(runFilter)
+      : { deletedCount: 0 };
 
     res.json({
       message: 'Deleted central run',

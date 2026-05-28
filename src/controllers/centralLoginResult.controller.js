@@ -1,5 +1,6 @@
 const CentralRun = require('../models/CentralRun');
 const CentralLoginResult = require('../models/CentralLoginResult');
+const { getCentralToolFilter } = require('../config/centralTools');
 
 function sumAmount(items = []) {
   return items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -122,10 +123,14 @@ exports.getAll = async (req, res) => {
       limit = 100
     } = req.query;
 
-    const filter = {};
+    const filter = {
+      toolName: getCentralToolFilter()
+    };
 
     if (runKey) filter.runKey = String(runKey);
-    if (toolName) filter.toolName = String(toolName);
+    if (toolName) {
+      filter.toolName = getCentralToolFilter(toolName);
+    }
     if (status) filter.status = String(status);
 
     if (search) {
