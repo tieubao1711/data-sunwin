@@ -11,6 +11,105 @@ function escapeRegex(text = '') {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+async function attachCheckedInfo(items = []) {
+  const accountIds = items.map((item) => String(item._id));
+
+  if (!accountIds.length) {
+    return items.map((item) => ({
+      ...item,
+      isChecked: false,
+      checkedStatus: '',
+      checkedBalance: 0
+    }));
+  }
+
+  const checkedRows = await AccountChecked.find(
+    { accountId: { $in: accountIds } },
+    { accountId: 1, status: 1, balance: 1 }
+  ).lean();
+
+  const checkedMap = new Map(
+    checkedRows.map(row => [String(row.accountId), row])
+  );
+
+  return items.map(item => {
+    const checkedInfo = checkedMap.get(String(item._id));
+
+    return {
+      ...item,
+      isChecked: !!checkedInfo,
+      checkedStatus: checkedInfo?.status || '',
+      checkedBalance: checkedInfo?.balance || 0
+    };
+  });
+}
+
+async function getAccountsWithCheckedFilter({
+  filter,
+  checked,
+  finalSortBy,
+  finalSortOrder,
+  skip,
+  limit,
+  isAll,
+  page
+}) {
+  const itemsPipeline = [];
+
+  if (!isAll) {
+    itemsPipeline.push({ $skip: skip }, { $limit: limit });
+  }
+
+  itemsPipeline.push({
+    $project: {
+      checkedRows: 0,
+      checkedInfo: 0,
+      accountIdString: 0
+    }
+  });
+
+  const checkedMatch = checked === 'true'
+    ? { checkedInfo: { $ne: null } }
+    : { checkedInfo: null };
+
+  const result = await Account.aggregate([
+    { $match: filter },
+    { $addFields: { accountIdString: { $toString: '$_id' } } },
+    {
+      $lookup: {
+        from: 'accountcheckeds',
+        localField: 'accountIdString',
+        foreignField: 'accountId',
+        as: 'checkedRows'
+      }
+    },
+    { $addFields: { checkedInfo: { $arrayElemAt: ['$checkedRows', 0] } } },
+    { $match: checkedMatch },
+    { $sort: { [finalSortBy]: finalSortOrder } },
+    {
+      $facet: {
+        items: itemsPipeline,
+        meta: [{ $count: 'total' }]
+      }
+    }
+  ]);
+
+  const items = result[0]?.items || [];
+  const total = result[0]?.meta?.[0]?.total || 0;
+  const data = await attachCheckedInfo(items);
+
+  return {
+    items: data,
+    pagination: {
+      page,
+      limit: isAll ? total : limit,
+      total,
+      totalPages: isAll ? 1 : Math.ceil(total / limit)
+    },
+    total
+  };
+}
+
 // ==============================
 // CREATE
 // ==============================
@@ -173,23 +272,27 @@ exports.getAll = async (req, res) => {
       ];
     }
 
-    if (checked === 'true' || checked === 'false') {
-      const checkedRows = await AccountChecked.find({}, { accountId: 1 }).lean();
-      const checkedIds = checkedRows.map(x => x.accountId);
-
-      if (checked === 'true') {
-        filter._id = { $in: checkedIds };
-      } else {
-        filter._id = { $nin: checkedIds };
-      }
-    }
-
     const allowedSortFields = ['createdAt', 'updatedAt', 'fileName', 'username'];
     const finalSortBy = allowedSortFields.includes(sortBy)
       ? sortBy
       : 'createdAt';
 
     const finalSortOrder = sortOrder === 'asc' ? 1 : -1;
+
+    if (checked === 'true' || checked === 'false') {
+      const result = await getAccountsWithCheckedFilter({
+        filter,
+        checked,
+        finalSortBy,
+        finalSortOrder,
+        skip,
+        limit,
+        isAll,
+        page
+      });
+
+      return res.json(result);
+    }
 
     const query = Account.find(filter)
       .sort({ [finalSortBy]: finalSortOrder });
@@ -198,26 +301,12 @@ exports.getAll = async (req, res) => {
       query.skip(skip).limit(limit);
     }
 
-    const [items, total, checkedRows] = await Promise.all([
+    const [items, total] = await Promise.all([
       query.lean(),
-      Account.countDocuments(filter),
-      AccountChecked.find({}, { accountId: 1, status: 1, balance: 1 }).lean()
+      Account.countDocuments(filter)
     ]);
 
-    const checkedMap = new Map(
-      checkedRows.map(row => [String(row.accountId), row])
-    );
-
-    const data = items.map(item => {
-      const checkedInfo = checkedMap.get(String(item._id));
-
-      return {
-        ...item,
-        isChecked: !!checkedInfo,
-        checkedStatus: checkedInfo?.status || '',
-        checkedBalance: checkedInfo?.balance || 0
-      };
-    });
+    const data = await attachCheckedInfo(items);
 
     res.json({
       items: data,
@@ -273,14 +362,25 @@ exports.getUnchecked = async (req, res) => {
   try {
     const limit = Math.min(toPositiveInt(req.query.limit, 100), 1000);
 
-    const checkedRows = await AccountChecked.find({}, { accountId: 1 }).lean();
-    const checkedIds = checkedRows.map(x => x.accountId);
-
-    const items = await Account.find({
-      _id: { $nin: checkedIds }
-    })
-      .limit(limit)
-      .lean();
+    const items = await Account.aggregate([
+      { $addFields: { accountIdString: { $toString: '$_id' } } },
+      {
+        $lookup: {
+          from: 'accountcheckeds',
+          localField: 'accountIdString',
+          foreignField: 'accountId',
+          as: 'checkedRows'
+        }
+      },
+      { $match: { checkedRows: { $eq: [] } } },
+      { $limit: limit },
+      {
+        $project: {
+          checkedRows: 0,
+          accountIdString: 0
+        }
+      }
+    ]);
 
     res.json({
       items,

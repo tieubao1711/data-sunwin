@@ -35,5 +35,8 @@ const schema = new mongoose.Schema({
 
 // tránh 1 run gửi trùng 1 acc nhiều lần
 schema.index({ runKey: 1, username: 1 }, { unique: true });
+schema.index({ runKey: 1, status: 1 });
+schema.index({ runKey: 1, balance: -1, checkedAt: -1 });
+schema.index({ toolName: 1, runKey: 1, status: 1 });
 
 module.exports = mongoose.model('CentralLoginResult', schema);

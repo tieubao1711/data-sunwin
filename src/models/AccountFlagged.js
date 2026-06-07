@@ -29,5 +29,8 @@ const schema = new mongoose.Schema({
 }, { timestamps: true });
 
 schema.index({ username: 1 }, { unique: true });
+schema.index({ updatedAt: -1 });
+schema.index({ balance: -1 });
+schema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('AccountFlagged', schema);

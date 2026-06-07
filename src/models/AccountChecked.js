@@ -12,4 +12,8 @@ const schema = new mongoose.Schema({
   message: String
 }, { timestamps: true });
 
+schema.index({ status: 1, updatedAt: -1 });
+schema.index({ balance: -1 });
+schema.index({ updatedAt: -1 });
+
 module.exports = mongoose.model('AccountChecked', schema);
