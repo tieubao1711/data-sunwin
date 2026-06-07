@@ -110,6 +110,18 @@ async function getAccountsWithCheckedFilter({
   };
 }
 
+function isPlainEmptyFilter(filter = {}) {
+  return Object.keys(filter).length === 0;
+}
+
+async function countAccounts(filter) {
+  if (isPlainEmptyFilter(filter)) {
+    return Account.estimatedDocumentCount();
+  }
+
+  return Account.countDocuments(filter);
+}
+
 // ==============================
 // CREATE
 // ==============================
@@ -303,7 +315,7 @@ exports.getAll = async (req, res) => {
 
     const [items, total] = await Promise.all([
       query.lean(),
-      Account.countDocuments(filter)
+      countAccounts(filter)
     ]);
 
     const data = await attachCheckedInfo(items);

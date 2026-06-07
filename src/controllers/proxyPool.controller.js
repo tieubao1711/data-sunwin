@@ -51,30 +51,23 @@ exports.getPools = async (req, res) => {
       .sort({ updatedAt: -1 })
       .lean();
 
-    const stats = await ProxyItem.aggregate([
-      {
-        $group: {
-          _id: '$poolId',
-          total: { $sum: 1 },
-          activeCount: { $sum: { $cond: [{ $eq: ['$status', 'ACTIVE'] }, 1, 0] } },
-          deadCount: { $sum: { $cond: [{ $eq: ['$status', 'DEAD'] }, 1, 0] } },
-          disabledCount: { $sum: { $cond: [{ $eq: ['$status', 'DISABLED'] }, 1, 0] } }
-        }
-      }
-    ]);
-
-    const statsByPool = new Map(stats.map((item) => [String(item._id), item]));
-    const items = pools.map((pool) => {
-      const poolStats = statsByPool.get(String(pool._id)) || {};
+    const items = await Promise.all(pools.map(async (pool) => {
+      const poolId = toObjectId(pool._id);
+      const [total, activeCount, deadCount, disabledCount] = await Promise.all([
+        ProxyItem.countDocuments({ poolId }),
+        ProxyItem.countDocuments({ poolId, status: 'ACTIVE' }),
+        ProxyItem.countDocuments({ poolId, status: 'DEAD' }),
+        ProxyItem.countDocuments({ poolId, status: 'DISABLED' })
+      ]);
 
       return {
         ...pool,
-        total: poolStats.total || 0,
-        activeCount: poolStats.activeCount || 0,
-        deadCount: poolStats.deadCount || 0,
-        disabledCount: poolStats.disabledCount || 0
+        total,
+        activeCount,
+        deadCount,
+        disabledCount
       };
-    });
+    }));
 
     res.json({ items });
   } catch (err) {

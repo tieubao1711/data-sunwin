@@ -27,5 +27,6 @@ const schema = new mongoose.Schema({
 }, { timestamps: true });
 
 schema.index({ poolId: 1, url: 1 }, { unique: true });
+schema.index({ poolId: 1, status: 1 });
 
 module.exports = mongoose.model('ProxyItem', schema);
