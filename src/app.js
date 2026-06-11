@@ -12,7 +12,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.use('/accounts', require('./routes/account.routes'));
 app.use('/account-checked', require('./routes/accountChecked.routes'));

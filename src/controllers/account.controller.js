@@ -11,6 +11,29 @@ function escapeRegex(text = '') {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function normalizeAccountInput(item = {}, fallbackFileName = '') {
+  const username = String(item.username || '').trim();
+  const password = String(item.password || '').trim();
+
+  if (!username || !password) return null;
+
+  return {
+    fileName: String(item.fileName || fallbackFileName || '').trim(),
+    username,
+    password
+  };
+}
+
+function chunk(items, size) {
+  const chunks = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+
+  return chunks;
+}
+
 async function attachCheckedInfo(items = []) {
   const accountIds = items.map((item) => String(item._id));
 
@@ -150,6 +173,107 @@ exports.create = async (req, res) => {
       });
     }
 
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.importJson = async (req, res) => {
+  try {
+    const fileName = String(req.body.fileName || req.query.fileName || '').trim();
+    const rawItems = Array.isArray(req.body)
+      ? req.body
+      : Array.isArray(req.body.items)
+        ? req.body.items
+        : [];
+
+    if (!rawItems.length) {
+      return res.status(400).json({
+        message: 'items array is required'
+      });
+    }
+
+    const seen = new Set();
+    const invalid = [];
+    const docs = [];
+
+    rawItems.forEach((item, index) => {
+      const normalized = normalizeAccountInput(item, fileName);
+
+      if (!normalized) {
+        invalid.push({ index, message: 'username and password are required' });
+        return;
+      }
+
+      const key = `${normalized.username}\n${normalized.password}`;
+      if (seen.has(key)) return;
+
+      seen.add(key);
+      docs.push(normalized);
+    });
+
+    let inserted = 0;
+    let existing = 0;
+    let modified = 0;
+    const errors = [];
+
+    for (const batch of chunk(docs, 1000)) {
+      try {
+        const result = await Account.bulkWrite(
+          batch.map((doc) => ({
+            updateOne: {
+              filter: {
+                username: doc.username,
+                password: doc.password
+              },
+              update: {
+                $setOnInsert: doc
+              },
+              upsert: true
+            }
+          })),
+          { ordered: false }
+        );
+
+        inserted += result.upsertedCount || 0;
+        existing += result.matchedCount || 0;
+        modified += result.modifiedCount || 0;
+      } catch (err) {
+        if (err.name !== 'MongoBulkWriteError' && err.name !== 'BulkWriteError') {
+          throw err;
+        }
+
+        const writeErrors = err.writeErrors || [];
+        errors.push(
+          ...writeErrors
+            .slice(0, 50)
+            .map((writeError) => ({
+              index: writeError.index,
+              code: writeError.code,
+              message: writeError.errmsg || writeError.message
+            }))
+        );
+
+        inserted += err.result?.upsertedCount || 0;
+        existing += err.result?.matchedCount || 0;
+        modified += err.result?.modifiedCount || 0;
+      }
+    }
+
+    res.json({
+      success: true,
+      fileName,
+      received: rawItems.length,
+      valid: docs.length,
+      inserted,
+      existing,
+      modified,
+      skippedInPayload: rawItems.length - docs.length - invalid.length,
+      invalidCount: invalid.length,
+      invalid: invalid.slice(0, 50),
+      errorCount: errors.length,
+      errors
+    });
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
