@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "export:accounts": "node scripts/exportAllAccounts.js",
     "export:suntong": "node scripts/exportAccountsByFileName.js suntong.json",
     "export:suntong:api": "node scripts/exportAccountsByFileNameApi.js suntong.json",
     "db:health": "node scripts/dbHealth.js",
