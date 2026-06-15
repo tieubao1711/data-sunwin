@@ -19,7 +19,7 @@ app.use('/account-checked', require('./routes/accountChecked.routes'));
 app.use('/dashboard', require('./routes/dashboard.routes'));
 app.use('/account-flagged', require('./routes/accountFlagged.routes'));
 app.use('/central-runs', require('./routes/centralRun.routes'));
-app.use('/central-login-results', require('./routes/centralLoginResult.routes'));
+app.use('/central-login-results-2', require('./routes/centralLoginResult.routes'));
 app.use('/proxy-pools', require('./routes/proxyPool.routes'));
 
 module.exports = app;
