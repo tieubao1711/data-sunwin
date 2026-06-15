@@ -1,16 +1,29 @@
 const express = require('express');
 const cors = require('cors');
+const {
+  getAllowedOrigins,
+  getAllowedHosts,
+  normalizeHost
+} = require('./config/http');
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://103.82.135.143:5173'
-  ],
+  origin: getAllowedOrigins(),
   credentials: true
 }));
+
+app.use((req, res, next) => {
+  const allowedHosts = getAllowedHosts();
+  if (!allowedHosts.length) return next();
+
+  const host = normalizeHost(req.headers.host || '');
+  if (allowedHosts.includes(host)) return next();
+
+  return res.status(403).json({ message: 'Host is not allowed' });
+});
 
 app.use(express.json({ limit: '50mb' }));
 

@@ -179,6 +179,7 @@ exports.create = async (req, res) => {
 
 exports.importJson = async (req, res) => {
   try {
+    const startedAt = Date.now();
     const fileName = String(req.body.fileName || req.query.fileName || '').trim();
     const rawItems = Array.isArray(req.body)
       ? req.body
@@ -214,11 +215,13 @@ exports.importJson = async (req, res) => {
     let inserted = 0;
     let existing = 0;
     let modified = 0;
+    let batches = 0;
     const errors = [];
 
-    for (const batch of chunk(docs, 1000)) {
+    for (const batch of chunk(docs, 5000)) {
       try {
-        const result = await Account.bulkWrite(
+        const now = new Date();
+        const result = await Account.collection.bulkWrite(
           batch.map((doc) => ({
             updateOne: {
               filter: {
@@ -226,7 +229,12 @@ exports.importJson = async (req, res) => {
                 password: doc.password
               },
               update: {
-                $setOnInsert: doc
+                $setOnInsert: {
+                  ...doc,
+                  createdAt: now,
+                  updatedAt: now,
+                  __v: 0
+                }
               },
               upsert: true
             }
@@ -237,6 +245,7 @@ exports.importJson = async (req, res) => {
         inserted += result.upsertedCount || 0;
         existing += result.matchedCount || 0;
         modified += result.modifiedCount || 0;
+        batches += 1;
       } catch (err) {
         if (err.name !== 'MongoBulkWriteError' && err.name !== 'BulkWriteError') {
           throw err;
@@ -256,6 +265,7 @@ exports.importJson = async (req, res) => {
         inserted += err.result?.upsertedCount || 0;
         existing += err.result?.matchedCount || 0;
         modified += err.result?.modifiedCount || 0;
+        batches += 1;
       }
     }
 
@@ -267,6 +277,8 @@ exports.importJson = async (req, res) => {
       inserted,
       existing,
       modified,
+      batches,
+      durationMs: Date.now() - startedAt,
       skippedInPayload: rawItems.length - docs.length - invalid.length,
       invalidCount: invalid.length,
       invalid: invalid.slice(0, 50),
