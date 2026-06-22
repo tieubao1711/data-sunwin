@@ -30,7 +30,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/accounts', require('./routes/account.routes'));
 app.use('/account-checked-2', require('./routes/accountChecked.routes'));
 app.use('/dashboard', require('./routes/dashboard.routes'));
-app.use('/account-flagged-2', require('./routes/accountFlagged.routes'));
+app.use('/account-flagged', require('./routes/accountFlagged.routes'));
 // app.use('/central-runs', require('./routes/centralRun.routes'));
 // app.use('/central-login-results-2', require('./routes/centralLoginResult.routes'));
 app.use('/proxy-pools', require('./routes/proxyPool.routes'));
